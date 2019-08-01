@@ -2,6 +2,7 @@ import asyncio
 import logging
 import datetime
 import time
+import random
 from contextlib import suppress
 from typing import List, Iterator, Awaitable, Union
 
@@ -23,6 +24,8 @@ from ib_insync.objects import (
     DepthMktDataDescription)
 
 __all__ = ['IB']
+
+_connections_cache = {}
 
 
 class IB:
@@ -129,16 +132,16 @@ class IB:
           fill: :class:`.Fill`, report: :class:`.CommissionReport`):
           The commission report is emitted after the fill that it belongs to.
 
-        * ``updatePortfolioEvent`` (item: :class:`.PortfolioItem`):
+        * ``update_portfolio_event`` (item: :class:`.PortfolioItem`):
           A portfolio item has changed.
 
         * ``positionEvent`` (position: :class:`.Position`):
           A position has changed.
 
-        * ``accountValueEvent`` (value: :class:`.AccountValue`):
+        * ``account_value_event`` (value: :class:`.AccountValue`):
           An account value has changed.
 
-        * ``accountSummaryEvent`` (value: :class:`.AccountValue`):
+        * ``account_summary_event`` (value: :class:`.AccountValue`):
           An account value has changed.
 
         * ``pnlEvent`` (entry: :class:`.PnL`):
@@ -178,10 +181,21 @@ class IB:
         'newOrderEvent', 'orderModifyEvent', 'cancelOrderEvent',
         'openOrderEvent', 'orderStatusEvent',
         'execDetailsEvent', 'commissionReportEvent',
-        'updatePortfolioEvent', 'positionEvent', 'accountValueEvent',
-        'accountSummaryEvent', 'pnlEvent', 'pnlSingleEvent',
+        'update_portfolio_event', 'positionEvent', 'account_value_event',
+        'account_summary_event', 'pnlEvent', 'pnlSingleEvent',
         'scannerDataEvent', 'tickNewsEvent', 'newsBulletinEvent',
         'errorEvent', 'timeoutEvent')
+
+    _default_account_summary_tags = (
+        'AccountType,NetLiquidation,TotalCashValue,SettledCash,'
+        'AccruedCash,BuyingPower,EquityWithLoanValue,'
+        'PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,'
+        'ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,'
+        'ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,'
+        'FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,'
+        'LookAheadInitMarginReq,LookAheadMaintMarginReq,'
+        'LookAheadAvailableFunds,LookAheadExcessLiquidity,'
+        'HighestSeverity,DayTradesRemaining,Leverage,$LEDGER:ALL')
 
     RequestTimeout = 0
 
@@ -205,10 +219,10 @@ class IB:
         self.orderStatusEvent = Event('orderStatusEvent')
         self.execDetailsEvent = Event('execDetailsEvent')
         self.commissionReportEvent = Event('commissionReportEvent')
-        self.updatePortfolioEvent = Event('updatePortfolioEvent')
+        self.update_portfolio_event = Event('update_portfolio_event')
         self.positionEvent = Event('positionEvent')
-        self.accountValueEvent = Event('accountValueEvent')
-        self.accountSummaryEvent = Event('accountSummaryEvent')
+        self.account_value_event = Event('account_value_event')
+        self.account_summary_event = Event('account_summary_event')
         self.pnlEvent = Event('pnlEvent')
         self.pnlSingleEvent = Event('pnlSingleEvent')
         self.scannerDataEvent = Event('scannerDataEvent')
@@ -228,33 +242,9 @@ class IB:
 
     def __repr__(self):
         conn = (f'connected to {self.client.host}:'
-                f'{self.client.port} clientId={self.client.clientId}' if
+                f'{self.client.port} client_id={self.client.client_id}' if
                 self.client.isConnected() else 'not connected')
         return f'<{self.__class__.__qualname__} {conn}>'
-
-    def connect(
-            self, host: str = '127.0.0.1', port: int = 7497,
-            clientId: int = 1, timeout: float = 2, readonly: bool = False):
-        """
-        Connect to a running TWS or IB gateway application.
-        After the connection is made the client is fully synchronized
-        and ready to serve requests.
-
-        This method is blocking.
-
-        Args:
-            host: Host name or IP address.
-            port: Port number.
-            clientId: ID number to use for this client; must be unique per
-                connection. Setting clientId=0 will automatically merge manual
-                TWS trading with this client.
-            timeout: If establishing the connection takes longer than
-                ``timeout`` seconds then the ``asyncio.TimeoutError`` exception
-                is raised. Set to 0 to disable timeout.
-            readonly: Set to ``True`` when API is in read-only mode.
-        """
-        return self._run(self.connectAsync(
-            host, port, clientId, timeout, readonly))
 
     def disconnect(self):
         """
@@ -279,7 +269,6 @@ class IB:
         """
         return self.client.isConnected()
 
-    run = staticmethod(util.run)
     schedule = staticmethod(util.schedule)
     sleep = staticmethod(util.sleep)
     timeRange = staticmethod(util.timeRange)
@@ -349,7 +338,8 @@ class IB:
         """
         self.wrapper.setTimeout(timeout)
 
-    def managedAccounts(self) -> List[str]:
+    @property
+    def managed_accounts(self) -> List[str]:
         """
         List of account names.
         """
@@ -369,19 +359,17 @@ class IB:
         else:
             return list(self.wrapper.accountValues.values())
 
-    def accountSummary(self, account: str = '') -> List[AccountValue]:
+    async def account_summary_async(self, account: str = '', tags=_default_account_summary_tags):
         """
         List of account values for the given account,
         or of all accounts if account is left blank.
-
-        This method is blocking on first run, non-blocking after that.
 
         Args:
             account: If specified, filter for this account name.
         """
         if not self.wrapper.acctSummary:
             # loaded on demand since it takes ca. 250 ms
-            self.reqAccountSummary()
+            await self.req_account_summary_async(tags=tags)
         if account:
             return [v for v in self.wrapper.acctSummary.values()
                     if v.account == account]
@@ -642,7 +630,7 @@ class IB:
         self.client.placeOrder(orderId, contract, order)
         now = datetime.datetime.now(datetime.timezone.utc)
         key = self.wrapper.orderKey(
-            self.wrapper.clientId, orderId, order.permId)
+            self.wrapper.client_id, orderId, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
             # this is a modification of an existing order
@@ -654,7 +642,7 @@ class IB:
             self.orderModifyEvent.emit(trade)
         else:
             # this is a new order
-            order.clientId = self.wrapper.clientId
+            order.client_id = self.wrapper.client_id
             order.orderId = orderId
             orderStatus = OrderStatus(status=OrderStatus.PendingSubmit)
             logEntry = TradeLogEntry(now, orderStatus.status, '')
@@ -675,7 +663,7 @@ class IB:
         self.client.cancelOrder(order.orderId)
         now = datetime.datetime.now(datetime.timezone.utc)
         key = self.wrapper.orderKey(
-            order.clientId, order.orderId, order.permId)
+            order.client_id, order.orderId, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
             if not trade.isDone():
@@ -754,15 +742,15 @@ class IB:
 
         This method is blocking.
         """
-        self._run(self.reqAccountSummaryAsync())
+        self._run(self.req_account_summary_async())
 
     def reqAutoOpenOrders(self, autoBind: bool = True):
         """
         Bind manual TWS orders so that they can be managed from this client.
-        The clientId must be 0 and the TWS API setting "Use negative numbers
+        The client_id must be 0 and the TWS API setting "Use negative numbers
         to bind automatic orders" must be checked.
 
-        This request is automatically called when clientId=0.
+        This request is automatically called when client_id=0.
 
         https://interactivebrokers.github.io/tws-api/open_orders.html
         https://interactivebrokers.github.io/tws-api/modifying_orders.html
@@ -789,7 +777,7 @@ class IB:
         """
         Request and return a list of all open orders over all clients.
         Note that the orders of other clients will not be kept in sync,
-        use the master clientId mechanism instead to see other
+        use the master client_id mechanism instead to see other
         client's orders that are kept in sync.
         """
         return self._run(self.reqAllOpenOrdersAsync())
@@ -1610,13 +1598,10 @@ class IB:
 
     # now entering the parallel async universe
 
-    async def connectAsync(
-            self, host='127.0.0.1', port=7497, clientId=1,
-            timeout=2, readonly=False):
-
+    async def _connect_async_impl(self, host, port, client_id, timeout, readonly, silent):
         async def connect():
-            self.wrapper.clientId = clientId
-            await self.client.connectAsync(host, port, clientId, timeout)
+            self.wrapper.client_id = client_id
+            await self.client.connectAsync(host, port, client_id, timeout)
             if not readonly and self.client.serverVersion() >= 150:
                 await self.reqCompletedOrdersAsync(False)
             accounts = self.client.getAccounts()
@@ -1625,21 +1610,46 @@ class IB:
                 *(self.reqAccountUpdatesMultiAsync(a) for a in accounts),
                 self.reqPositionsAsync(),
                 self.reqExecutionsAsync())
-            if clientId == 0:
+            if client_id == 0:
                 # autobind manual orders
                 self.reqAutoOpenOrders(True)
             self._logger.info('Synchronization complete')
             self.connectedEvent.emit()
 
-        if not self.isConnected():
-            try:
-                await asyncio.wait_for(connect(), timeout or None)
-            except Exception:
-                self.disconnect()
-                raise
-        else:
-            self._logger.warn('Already connected')
+        try:
+            await asyncio.wait_for(connect(), timeout or None)
+        except Exception:
+            self.disconnect()
+            raise
         return self
+
+    async def connect_async(self, host='127.0.0.1', port=7497, timeout=2, readonly=False, num_tries=5):
+        if self.isConnected():
+            self._logger.warn('Already connected')
+            return self
+        key = f'{host}:{port}'
+        used = _connections_cache.get(key)
+        if used is None:
+            _connections_cache[key] = used = set()
+        start_id = 1
+        while num_tries > 0:
+            end_id = start_id * 2
+            id = random.randint(start_id, end_id - 1)
+            if id in used:
+                start_id = end_id
+                continue
+            num_tries -= 1
+            try:
+                return await self._connect_async_impl(host, port, id, timeout, readonly, silent=(num_tries==0))
+            except Exception:
+                pass
+            finally:
+                used.add(id)
+                def on_disconnect(*args, **kwargs):
+                    used.discard(id)
+                    if len(used) == 0:
+                        _connections_cache.pop(key)
+                self.disconnectedEvent += on_disconnect
 
     async def qualifyContractsAsync(self, *contracts):
         detailsLists = await asyncio.gather(
@@ -1706,20 +1716,10 @@ class IB:
         self.client.reqAccountUpdatesMulti(reqId, account, modelCode, False)
         return future
 
-    def reqAccountSummaryAsync(self):
+    def req_account_summary_async(self, groupName='All', tags=_default_account_summary_tags):
         reqId = self.client.getReqId()
         future = self.wrapper.startReq(reqId)
-        tags = (
-            'AccountType,NetLiquidation,TotalCashValue,SettledCash,'
-            'AccruedCash,BuyingPower,EquityWithLoanValue,'
-            'PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,'
-            'ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,'
-            'ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,'
-            'FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,'
-            'LookAheadInitMarginReq,LookAheadMaintMarginReq,'
-            'LookAheadAvailableFunds,LookAheadExcessLiquidity,'
-            'HighestSeverity,DayTradesRemaining,Leverage,$LEDGER:ALL')
-        self.client.reqAccountSummary(reqId, 'All', tags)
+        self.client.reqAccountSummary(reqId, groupName, tags)
         return future
 
     def reqOpenOrdersAsync(self):
@@ -1938,5 +1938,5 @@ if __name__ == '__main__':
     asyncio.get_event_loop().set_debug(True)
     util.logToConsole(logging.DEBUG)
     ib = IB()
-    ib.connect('127.0.0.1', 7497, clientId=1)
+    ib.connect('127.0.0.1', 7497, client_id=1)
     ib.disconnect()

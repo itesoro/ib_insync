@@ -12,7 +12,7 @@ from .contract import Contract
 from .connection import Connection
 from .decoder import Decoder
 from .objects import ConnectionStats
-from .util import run, UNSET_INTEGER, UNSET_DOUBLE
+from .util import UNSET_INTEGER, UNSET_DOUBLE
 
 __all__ = ['Client']
 
@@ -102,6 +102,10 @@ class Client:
         self._tcpDataArrived = getattr(wrapper, 'tcpDataArrived', None)
         self._tcpDataProcessed = getattr(wrapper, 'tcpDataProcessed', None)
 
+    def __del__(self):
+        if self.isConnected():
+            self.disconnect()
+
     def reset(self):
         self.host = None
         self.port = None
@@ -124,9 +128,6 @@ class Client:
 
     def serverVersion(self):
         return self._serverVersion
-
-    def run(self):
-        self._loop.run_forever()
 
     def isConnected(self):
         return self.connState == Client.CONNECTED
@@ -176,22 +177,6 @@ class Client:
                 into TWS/gateway 974+.
         """
         self._connectOptions = connectOptions.encode()
-
-    def connect(
-            self, host: str, port: int, clientId: int, timeout: float = 2):
-        """
-        Connect to a running TWS or IB gateway application.
-
-        Args:
-            host: Host name or IP address.
-            port: Port number.
-            clientId: ID number to use for this client; must be unique per
-                connection.
-            timeout: If establishing the connection takes longer than
-                ``timeout`` seconds then the ``asyncio.TimeoutError`` exception
-                is raised. Set to 0 to disable timeout.
-        """
-        run(self.connectAsync(host, port, clientId, timeout))
 
     async def connectAsync(self, host, port, clientId, timeout=2):
 

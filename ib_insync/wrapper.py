@@ -188,7 +188,7 @@ class Wrapper:
         key = (account, tag, currency, '')
         acctVal = AccountValue(account, tag, val, currency, '')
         self.accountValues[key] = acctVal
-        self.ib.accountValueEvent.emit(acctVal)
+        self.ib.account_value_event.emit(acctVal)
 
     def accountDownloadEnd(self, _account):
         # sent after updateAccountValue and updatePortfolio both finished
@@ -199,7 +199,7 @@ class Wrapper:
         key = (account, tag, currency, modelCode)
         acctVal = AccountValue(account, tag, val, currency, modelCode)
         self.accountValues[key] = acctVal
-        self.ib.accountValueEvent.emit(acctVal)
+        self.ib.account_value_event.emit(acctVal)
 
     def accountUpdateMultiEnd(self, reqId):
         self._endReq(reqId)
@@ -208,7 +208,7 @@ class Wrapper:
         key = (account, tag, currency)
         acctVal = AccountValue(account, tag, value, currency, '')
         self.acctSummary[key] = acctVal
-        self.ib.accountSummaryEvent.emit(acctVal)
+        self.ib.account_summary_event.emit(acctVal)
 
     def accountSummaryEnd(self, reqId):
         self._endReq(reqId)
@@ -226,7 +226,7 @@ class Wrapper:
         else:
             portfolioItems[contract.conId] = portfItem
         self._logger.info(f'updatePortfolio: {portfItem}')
-        self.ib.updatePortfolioEvent.emit(portfItem)
+        self.ib.update_portfolio_event.emit(portfItem)
 
     def position(self, account, contract, posSize, avgCost):
         contract = Contract.create(**contract.dict())
