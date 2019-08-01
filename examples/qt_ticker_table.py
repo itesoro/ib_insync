@@ -54,7 +54,7 @@ class TickerTable(qt.QTableWidget):
 
 class Window(qt.QWidget):
 
-    def __init__(self, host, port, clientId):
+    def __init__(self, host, port, client_id):
         qt.QWidget.__init__(self)
         self.edit = qt.QLineEdit('', self)
         self.edit.editingFinished.connect(self.add)
@@ -66,7 +66,7 @@ class Window(qt.QWidget):
         layout.addWidget(self.table)
         layout.addWidget(self.connectButton)
 
-        self.connectInfo = (host, port, clientId)
+        self.connectInfo = (host, port, client_id)
         self.ib = IB()
         self.ib.pendingTickersEvent += self.table.onPendingTickers
 

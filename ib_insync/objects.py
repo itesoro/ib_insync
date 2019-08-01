@@ -261,8 +261,8 @@ class Execution(Object):
         shares=0.0,
         price=0.0,
         permId=0,
-        clientId=0,
-        orderId=0,
+        client_id=0,
+        order_id=0,
         liquidation=0,
         cumQty=0.0,
         avgPrice=0.0,
@@ -287,7 +287,7 @@ class CommissionReport(Object):
 
 class ExecutionFilter(Object):
     defaults = dict(
-        clientId=0,
+        client_id=0,
         acctCode='',
         time='',
         symbol='',

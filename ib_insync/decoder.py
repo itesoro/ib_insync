@@ -370,7 +370,7 @@ class Decoder:
         (
             _,
             reqId,
-            ex.orderId,
+            ex.order_id,
             c.conId,
             c.symbol,
             c.secType,
@@ -390,7 +390,7 @@ class Decoder:
             ex.shares,
             ex.price,
             ex.permId,
-            ex.clientId,
+            ex.client_id,
             ex.liquidation,
             ex.cumQty,
             ex.avgPrice,
@@ -773,7 +773,7 @@ class Decoder:
 
         (
             _,
-            o.orderId,
+            o.order_id,
             c.conId,
             c.symbol,
             c.secType,
@@ -787,7 +787,7 @@ class Decoder:
             c.tradingClass,
             o.action,
             o.totalQuantity,
-            o.orderType,
+            o.order_type,
             o.lmtPrice,
             o.auxPrice,
             o.tif,
@@ -796,7 +796,7 @@ class Decoder:
             o.openClose,
             o.origin,
             o.orderRef,
-            o.clientId,
+            o.client_id,
             o.permId,
             o.outsideRth,
             o.hidden,
@@ -965,7 +965,7 @@ class Decoder:
             o.randomizePrice,
             *fields) = fields
 
-        if o.orderType == 'PEG BENCH':
+        if o.order_type == 'PEG BENCH':
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,
@@ -1016,7 +1016,7 @@ class Decoder:
         self.parse(c)
         self.parse(o)
         self.parse(st)
-        self.wrapper.openOrder(o.orderId, c, o, st)
+        self.wrapper.openOrder(o.order_id, c, o, st)
 
     def completedOrder(self, fields):
         o = Order()
@@ -1038,7 +1038,7 @@ class Decoder:
             c.tradingClass,
             o.action,
             o.totalQuantity,
-            o.orderType,
+            o.order_type,
             o.lmtPrice,
             o.auxPrice,
             o.tif,
@@ -1178,7 +1178,7 @@ class Decoder:
             o.randomizePrice,
             *fields) = fields
 
-        if o.orderType == 'PEG BENCH':
+        if o.order_type == 'PEG BENCH':
             (
                 o.referenceContractId,
                 o.isPeggedChangeAmountDecrease,

@@ -110,19 +110,19 @@ class IB:
           real time. If a new bar has been added then hasNewBar is True,
           when the last bar has changed it is False.
 
-        * ``newOrderEvent`` (trade: :class:`.Trade`):
+        * ``new_order_event`` (trade: :class:`.Trade`):
           Emits a newly placed trade.
 
-        * ``orderModifyEvent`` (trade: :class:`.Trade`):
+        * ``order_modify_event`` (trade: :class:`.Trade`):
           Emits when order is modified.
 
-        * ``cancelOrderEvent`` (trade: :class:`.Trade`):
+        * ``cancel_order_event`` (trade: :class:`.Trade`):
           Emits a trade directly after requesting for it to be cancelled.
 
-        * ``openOrderEvent`` (trade: :class:`.Trade`):
+        * ``open_order_event`` (trade: :class:`.Trade`):
           Emits the trade with open order.
 
-        * ``orderStatusEvent`` (trade: :class:`.Trade`):
+        * ``order_status_event`` (trade: :class:`.Trade`):
           Emits the changed order status of the ongoing trade.
 
         * ``execDetailsEvent`` (trade: :class:`.Trade`, fill: :class:`.Fill`):
@@ -161,7 +161,7 @@ class IB:
 
         * ``errorEvent`` (reqId: int, errorCode: int, errorString: str,
           contract: :class:`.Contract`):
-          Emits the reqId/orderId and TWS error code and string (see
+          Emits the reqId/order_id and TWS error code and string (see
           https://interactivebrokers.github.io/tws-api/message_codes.html)
           together with the contract the error applies to (or None if no
           contract applies).
@@ -178,8 +178,8 @@ class IB:
     events = (
         'connectedEvent', 'disconnectedEvent', 'updateEvent',
         'pendingTickersEvent', 'barUpdateEvent',
-        'newOrderEvent', 'orderModifyEvent', 'cancelOrderEvent',
-        'openOrderEvent', 'orderStatusEvent',
+        'new_order_event', 'order_modify_event', 'cancel_order_event',
+        'open_order_event', 'order_status_event',
         'execDetailsEvent', 'commissionReportEvent',
         'update_portfolio_event', 'positionEvent', 'account_value_event',
         'account_summary_event', 'pnlEvent', 'pnlSingleEvent',
@@ -212,11 +212,11 @@ class IB:
         self.updateEvent = Event('updateEvent')
         self.pendingTickersEvent = Event('pendingTickersEvent')
         self.barUpdateEvent = Event('barUpdateEvent')
-        self.newOrderEvent = Event('newOrderEvent')
-        self.orderModifyEvent = Event('orderModifyEvent')
-        self.cancelOrderEvent = Event('cancelOrderEvent')
-        self.openOrderEvent = Event('openOrderEvent')
-        self.orderStatusEvent = Event('orderStatusEvent')
+        self.new_order_event = Event('new_order_event')
+        self.order_modify_event = Event('order_modify_event')
+        self.cancel_order_event = Event('cancel_order_event')
+        self.open_order_event = Event('open_order_event')
+        self.order_status_event = Event('order_status_event')
         self.execDetailsEvent = Event('execDetailsEvent')
         self.commissionReportEvent = Event('commissionReportEvent')
         self.update_portfolio_event = Event('update_portfolio_event')
@@ -367,9 +367,7 @@ class IB:
         Args:
             account: If specified, filter for this account name.
         """
-        if not self.wrapper.acctSummary:
-            # loaded on demand since it takes ca. 250 ms
-            await self.req_account_summary_async(tags=tags)
+        await self.req_account_summary_async(tags=tags)
         if account:
             return [v for v in self.wrapper.acctSummary.values()
                     if v.account == account]
@@ -570,20 +568,20 @@ class IB:
         reverseAction = 'BUY' if action == 'SELL' else 'SELL'
         parent = LimitOrder(
             action, quantity, limitPrice,
-            orderId=self.client.getReqId(),
+            order_id=self.client.getReqId(),
             transmit=False,
             **kwargs)
         takeProfit = LimitOrder(
             reverseAction, quantity, takeProfitPrice,
-            orderId=self.client.getReqId(),
+            order_id=self.client.getReqId(),
             transmit=False,
-            parentId=parent.orderId,
+            parentId=parent.order_id,
             **kwargs)
         stopLoss = StopOrder(
             reverseAction, quantity, stopLossPrice,
-            orderId=self.client.getReqId(),
+            order_id=self.client.getReqId(),
             transmit=True,
-            parentId=parent.orderId,
+            parentId=parent.order_id,
             **kwargs)
         return BracketOrder(parent, takeProfit, stopLoss)
 
@@ -626,11 +624,11 @@ class IB:
             contract: Contract to use for order.
             order: The order to be placed.
         """
-        orderId = order.orderId or self.client.getReqId()
-        self.client.placeOrder(orderId, contract, order)
+        order_id = order.order_id or self.client.getReqId()
+        self.client.placeOrder(order_id, contract, order)
         now = datetime.datetime.now(datetime.timezone.utc)
         key = self.wrapper.orderKey(
-            self.wrapper.client_id, orderId, order.permId)
+            self.wrapper.client_id, order_id, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
             # this is a modification of an existing order
@@ -639,18 +637,18 @@ class IB:
             trade.log.append(logEntry)
             self._logger.info(f'placeOrder: Modify order {trade}')
             trade.modifyEvent.emit(trade)
-            self.orderModifyEvent.emit(trade)
+            self.order_modify_event.emit(trade)
         else:
             # this is a new order
             order.client_id = self.wrapper.client_id
-            order.orderId = orderId
+            order.order_id = order_id
             orderStatus = OrderStatus(status=OrderStatus.PendingSubmit)
             logEntry = TradeLogEntry(now, orderStatus.status, '')
             trade = Trade(
                 contract, order, orderStatus, [], [logEntry])
             self.wrapper.trades[key] = trade
             self._logger.info(f'placeOrder: New order {trade}')
-            self.newOrderEvent.emit(trade)
+            self.new_order_event.emit(trade)
         return trade
 
     def cancelOrder(self, order: Order) -> Trade:
@@ -660,10 +658,10 @@ class IB:
         Args:
             order: The order to be canceled.
         """
-        self.client.cancelOrder(order.orderId)
+        self.client.cancelOrder(order.order_id)
         now = datetime.datetime.now(datetime.timezone.utc)
         key = self.wrapper.orderKey(
-            order.client_id, order.orderId, order.permId)
+            order.client_id, order.order_id, order.permId)
         trade = self.wrapper.trades.get(key)
         if trade:
             if not trade.isDone():
@@ -679,12 +677,12 @@ class IB:
                 self._logger.info(f'cancelOrder: {trade}')
                 trade.cancelEvent.emit(trade)
                 trade.statusEvent.emit(trade)
-                self.cancelOrderEvent.emit(trade)
-                self.orderStatusEvent.emit(trade)
+                self.cancel_order_event.emit(trade)
+                self.order_status_event.emit(trade)
                 if newStatus == OrderStatus.Cancelled:
                     trade.cancelledEvent.emit(trade)
         else:
-            self._logger.error(f'cancelOrder: Unknown orderId {order.orderId}')
+            self._logger.error(f'cancelOrder: Unknown order_id {order.order_id}')
         return trade
 
     def reqGlobalCancel(self):
@@ -732,17 +730,6 @@ class IB:
             modelCode: If specified, filter for this account model.
         """
         self._run(self.reqAccountUpdatesMultiAsync(account, modelCode))
-
-    def reqAccountSummary(self):
-        """
-        It is recommended to use :meth:`.accountSummary` instead.
-
-        Request account values for all accounts and keep them updated.
-        Returns when account summary is filled.
-
-        This method is blocking.
-        """
-        self._run(self.req_account_summary_async())
 
     def reqAutoOpenOrders(self, autoBind: bool = True):
         """

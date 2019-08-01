@@ -315,7 +315,7 @@ class Watchdog(Object):
             instance as Watchdog takes care of that.
         host (str): Used for connecting IB instance.
         port (int):  Used for connecting IB instance.
-        clientId (int):  Used for connecting IB instance.
+        client_id (int):  Used for connecting IB instance.
         connectTimeout (float):  Used for connecting IB instance.
         appStartupTime (float): Time (in seconds) that the app is given
             to start up. Make sure that it is given ample time.
@@ -361,7 +361,7 @@ class Watchdog(Object):
         ib=None,
         host='127.0.0.1',
         port='7497',
-        clientId=1,
+        client_id=1,
         connectTimeout=2,
         appStartupTime=30,
         appTimeout=20,
@@ -417,7 +417,7 @@ class Watchdog(Object):
                 await self.controller.startAsync()
                 await asyncio.sleep(self.appStartupTime)
                 await self.ib.connectAsync(
-                    self.host, self.port, self.clientId, self.connectTimeout)
+                    self.host, self.port, self.client_id, self.connectTimeout)
                 self.startedEvent.emit(self)
                 self.ib.setTimeout(self.appTimeout)
                 self.ib.timeoutEvent += onTimeout

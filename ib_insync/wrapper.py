@@ -35,7 +35,7 @@ class Wrapper:
         self.acctSummary = {}  # (account, tag, currency) -> AccountValue
         self.portfolio = defaultdict(dict)  # account -> conId -> PortfolioItem
         self.positions = defaultdict(dict)  # account -> conId -> Position
-        self.trades = {}  # (client, orderId) or permId -> Trade
+        self.trades = {}  # (client, order_id) or permId -> Trade
         self.permId2Trade = {}  # permId -> Trade
         self.fills = {}  # execId -> Fill
         self.newsTicks = []  # list of NewsTick
@@ -58,7 +58,7 @@ class Wrapper:
         self._reqId2Contract = {}
 
         self.accounts = []
-        self.clientId = -1
+        self.client_id = -1
         self.lastTime = None  # datetime (UTC) of last network packet arrival
         self._timeout = 0
         self.setTimeout(0)
@@ -138,12 +138,12 @@ class Wrapper:
         self._reqId2Contract.pop(subscriber.reqId, None)
         self.reqId2Subscriber.pop(subscriber.reqId, None)
 
-    def orderKey(self, clientId, orderId, permId):
-        if orderId <= 0:
+    def orderKey(self, client_id, order_id, permId):
+        if order_id <= 0:
             # order is placed manually from TWS
             key = permId
         else:
-            key = (clientId, orderId)
+            key = (client_id, order_id)
         return key
 
     def setTimeout(self, timeout):
@@ -266,21 +266,21 @@ class Wrapper:
         pnlSingle.value = value
         self.ib.pnlSingleEvent.emit(pnlSingle)
 
-    def openOrder(self, orderId, contract, order, orderState):
+    def openOrder(self, order_id, contract, order, orderState):
         """
         This wrapper is called to:
 
         * feed in open orders at startup;
         * feed in open orders or order updates from other clients and TWS
-          if clientId=master id;
-        * feed in manual orders and order updates from TWS if clientId=0;
+          if client_id=master id;
+        * feed in manual orders and order updates from TWS if client_id=0;
         * handle openOrders and allOpenOrders responses.
         """
         if order.whatIf:
             # response to whatIfOrder
-            self._endReq(order.orderId, orderState)
+            self._endReq(order.order_id, orderState)
         else:
-            key = self.orderKey(order.clientId, order.orderId, order.permId)
+            key = self.orderKey(order.client_id, order.order_id, order.permId)
             trade = self.trades.get(key)
             # ignore '?' values in the order
             d = {k: v for k, v in order.dict().items() if v != '?'}
@@ -296,7 +296,7 @@ class Wrapper:
             self.permId2Trade.setdefault(order.permId, trade)
             results = self._results.get('openOrders')
             if results is None:
-                self.ib.openOrderEvent.emit(trade)
+                self.ib.open_order_event.emit(trade)
             else:
                 # response to reqOpenOrders or reqAllOpenOrders
                 results.append(order)
@@ -317,10 +317,10 @@ class Wrapper:
         self._endReq('completedOrders')
 
     def orderStatus(
-            self, orderId, status, filled, remaining, avgFillPrice,
-            permId, parentId, lastFillPrice, clientId, whyHeld,
+            self, order_id, status, filled, remaining, avgFillPrice,
+            permId, parentId, lastFillPrice, client_id, whyHeld,
             mktCapPrice=0.0, lastLiquidity=0):
-        key = self.orderKey(clientId, orderId, permId)
+        key = self.orderKey(client_id, order_id, permId)
         trade = self.trades.get(key)
         if trade:
             oldStatus = trade.orderStatus.status
@@ -328,7 +328,7 @@ class Wrapper:
                 status=status, filled=filled,
                 remaining=remaining, avgFillPrice=avgFillPrice,
                 permId=permId, parentId=parentId,
-                lastFillPrice=lastFillPrice, clientId=clientId,
+                lastFillPrice=lastFillPrice, client_id=client_id,
                 whyHeld=whyHeld, mktCapPrice=mktCapPrice,
                 lastLiquidity=lastLiquidity)
             curr = trade.orderStatus.dict()
@@ -347,7 +347,7 @@ class Wrapper:
                 logEntry = TradeLogEntry(self.lastTime, status, msg)
                 trade.log.append(logEntry)
                 self._logger.info(f'orderStatus: {trade}')
-                self.ib.orderStatusEvent.emit(trade)
+                self.ib.order_status_event.emit(trade)
                 trade.statusEvent.emit(trade)
                 if status != oldStatus:
                     if status == OrderStatus.Filled:
@@ -357,18 +357,18 @@ class Wrapper:
         else:
             self._logger.error(
                 'orderStatus: No order found for '
-                'orderId %s and clientId %s', orderId, clientId)
+                'order_id %s and client_id %s', order_id, client_id)
 
     def execDetails(self, reqId, contract, execution):
         """
         This wrapper handles both live fills and responses to reqExecutions.
         """
         self._logger.info(f'execDetails {execution}')
-        if execution.orderId == UNSET_INTEGER:
+        if execution.order_id == UNSET_INTEGER:
             # bug in TWS: executions of manual orders have unset value
-            execution.orderId = 0
+            execution.order_id = 0
         key = self.orderKey(
-            execution.clientId, execution.orderId, execution.permId)
+            execution.client_id, execution.order_id, execution.permId)
         trade = self.trades.get(key) or self.permId2Trade.get(execution.permId)
         if trade and contract == trade.contract:
             contract = trade.contract
@@ -422,7 +422,7 @@ class Wrapper:
             # commission report is not for this client
             pass
 
-    def orderBound(self, reqId, apiClientId, apiOrderId):
+    def orderBound(self, reqId, apiclient_id, apiorder_id):
         pass
 
     def contractDetails(self, reqId, contractDetails):
@@ -926,15 +926,15 @@ class Wrapper:
             if reqId in self._futures:
                 # the request failed
                 self._endReq(reqId)
-            elif (self.clientId, reqId) in self.trades:
+            elif (self.client_id, reqId) in self.trades:
                 # something is wrong with the order, cancel it
-                trade = self.trades[(self.clientId, reqId)]
+                trade = self.trades[(self.client_id, reqId)]
                 if not trade.isDone():
                     status = trade.orderStatus.status = OrderStatus.Cancelled
                     logEntry = TradeLogEntry(self.lastTime, status, msg)
                     trade.log.append(logEntry)
                     self._logger.warning(f'Canceled order: {trade}')
-                    self.ib.orderStatusEvent.emit(trade)
+                    self.ib.order_status_event.emit(trade)
                     trade.cancelledEvent.emit(trade)
             elif errorCode == 317:
                 # Market depth data has been RESET

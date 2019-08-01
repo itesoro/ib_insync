@@ -109,7 +109,7 @@ class Client:
     def reset(self):
         self.host = None
         self.port = None
-        self.clientId = None
+        self.client_id = None
         self.conn = None
         self.connState = Client.DISCONNECTED
         self.optCapab = ''
@@ -178,14 +178,14 @@ class Client:
         """
         self._connectOptions = connectOptions.encode()
 
-    async def connectAsync(self, host, port, clientId, timeout=2):
+    async def connectAsync(self, host, port, client_id, timeout=2):
 
         async def connect():
             self._logger.info(
-                f'Connecting to {host}:{port} with clientId {clientId}...')
+                f'Connecting to {host}:{port} with client_id {client_id}...')
             self.host = host
             self.port = port
-            self.clientId = clientId
+            self.client_id = client_id
             self.connState = Client.CONNECTING
             self.conn = Connection(host, port)
             self.conn.hasData = self._onSocketHasData
@@ -352,7 +352,7 @@ class Client:
             msg = f'Peer closed connection'
             self._logger.error(msg)
             if not self.isReady():
-                msg = f'clientId {self.clientId} already in use?'
+                msg = f'client_id {self.client_id} already in use?'
                 self._logger.error(msg)
             self.apiError.emit(msg)
         else:
@@ -396,19 +396,19 @@ class Client:
     def cancelMktData(self, reqId):
         self.send(2, 2, reqId)
 
-    def placeOrder(self, orderId, contract, order):
+    def placeOrder(self, order_id, contract, order):
         version = self.serverVersion()
         fields = [3]
         if version < 145:
             fields += [45]
         fields += [
-            orderId,
+            order_id,
             contract,
             contract.secIdType,
             contract.secId,
             order.action,
             order.totalQuantity,
-            order.orderType,
+            order.order_type,
             order.lmtPrice,
             order.auxPrice,
             order.tif,
@@ -550,7 +550,7 @@ class Client:
             order.randomizeSize,
             order.randomizePrice]
 
-        if order.orderType == 'PEG BENCH':
+        if order.order_type == 'PEG BENCH':
             fields += [
                 order.referenceContractId,
                 order.isPeggedChangeAmountDecrease,
@@ -594,8 +594,8 @@ class Client:
 
         self.send(*fields)
 
-    def cancelOrder(self, orderId):
-        self.send(4, 1, orderId)
+    def cancelOrder(self, order_id):
+        self.send(4, 1, order_id)
 
     def reqOpenOrders(self):
         self.send(5, 1)
@@ -606,7 +606,7 @@ class Client:
     def reqExecutions(self, reqId, execFilter):
         self.send(
             7, 3, reqId,
-            execFilter.clientId,
+            execFilter.client_id,
             execFilter.acctCode,
             execFilter.time,
             execFilter.symbol,
@@ -839,7 +839,7 @@ class Client:
         self.send(70, 1, reqId)
 
     def startApi(self):
-        self.send(71, 2, self.clientId, self.optCapab)
+        self.send(71, 2, self.client_id, self.optCapab)
 
     def verifyAndAuthRequest(self, apiName, apiVersion, opaqueIsvKey):
         self.send(72, 1, apiName, apiVersion, opaqueIsvKey)

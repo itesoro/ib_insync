@@ -80,7 +80,7 @@ class Trade(Object):
 
 class OrderStatus(Object):
     defaults = dict(
-        orderId=0,
+        order_id=0,
         status='',
         filled=0,
         remaining=0,
@@ -88,7 +88,7 @@ class OrderStatus(Object):
         permId=0,
         parentId=0,
         lastFillPrice=0.0,
-        clientId=0,
+        client_id=0,
         whyHeld='',
         mktCapPrice=0.0,
         lastLiquidity=0
@@ -116,12 +116,12 @@ class Order(Object):
     https://interactivebrokers.github.io/tws-api/available_orders.html
     """
     defaults = dict(
-        orderId=0,
-        clientId=0,
+        order_id=0,
+        client_id=0,
         permId=0,
         action='',
         totalQuantity=0,
-        orderType='',
+        order_type='',
         lmtPrice=UNSET_DOUBLE,
         auxPrice=UNSET_DOUBLE,
         tif='',
@@ -258,7 +258,7 @@ class Order(Object):
     def __repr__(self):
         attrs = self.nonDefaults()
         if self.__class__ is not Order:
-            attrs.pop('orderType', None)
+            attrs.pop('order_type', None)
         clsName = self.__class__.__name__
         kwargs = ', '.join(f'{k}={v!r}' for k, v in attrs.items())
         return f'{clsName}({kwargs})'
@@ -277,7 +277,7 @@ class LimitOrder(Order):
 
     def __init__(self, action, totalQuantity, lmtPrice, **kwargs):
         Order.__init__(
-            self, orderType='LMT', action=action,
+            self, order_type='LMT', action=action,
             totalQuantity=totalQuantity, lmtPrice=lmtPrice, **kwargs)
 
 
@@ -286,7 +286,7 @@ class MarketOrder(Order):
 
     def __init__(self, action, totalQuantity, **kwargs):
         Order.__init__(
-            self, orderType='MKT', action=action,
+            self, order_type='MKT', action=action,
             totalQuantity=totalQuantity, **kwargs)
 
 
@@ -295,7 +295,7 @@ class StopOrder(Order):
 
     def __init__(self, action, totalQuantity, stopPrice, **kwargs):
         Order.__init__(
-            self, orderType='STP', action=action,
+            self, order_type='STP', action=action,
             totalQuantity=totalQuantity, auxPrice=stopPrice, **kwargs)
 
 
@@ -304,7 +304,7 @@ class StopLimitOrder(Order):
 
     def __init__(self, action, totalQuantity, lmtPrice, stopPrice, **kwargs):
         Order.__init__(
-            self, orderType='STP LMT', action=action,
+            self, order_type='STP LMT', action=action,
             totalQuantity=totalQuantity, lmtPrice=lmtPrice,
             auxPrice=stopPrice, **kwargs)
 
