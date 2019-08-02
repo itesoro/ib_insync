@@ -275,31 +275,6 @@ class IB:
     timeRangeAsync = staticmethod(util.timeRangeAsync)
     waitUntil = staticmethod(util.waitUntil)
 
-    def _run(self, *awaitables: List[Awaitable]):
-        return util.run(*awaitables, timeout=self.RequestTimeout)
-
-    def waitOnUpdate(self, timeout: float = 0) -> bool:
-        """
-        Wait on any new update to arrive from the network.
-
-        Args:
-            timeout: Maximum time in seconds to wait.
-                If 0 then no timeout is used.
-
-        .. note::
-            A loop with ``waitOnUpdate`` should not be used to harvest
-            tick data from tickers, since some ticks can go missing.
-            This happens when multiple updates occur almost simultaneously;
-            The ticks from the first update are then cleared.
-            Use events instead to prevent this.
-        """
-        if timeout:
-            with suppress(asyncio.TimeoutError):
-                util.run(asyncio.wait_for(self.updateEvent, timeout))
-        else:
-            util.run(self.updateEvent)
-        return True
-
     def loopUntil(
             self, condition=None, timeout: float = 0) -> Iterator[object]:
         """
@@ -435,7 +410,7 @@ class IB:
         """
         return list(self.wrapper.trades.values())
 
-    def openTrades(self) -> List[Trade]:
+    def open_trades(self) -> List[Trade]:
         """
         List of all open order trades.
         """
@@ -754,7 +729,7 @@ class IB:
         This method can give stale information where a new open order is not
         reported or an already filled or cancelled order is reported as open.
         It is recommended to use the more reliable and much faster
-        :meth:`.openTrades` or :meth:`.openOrders` methods instead.
+        :meth:`.open_trades` or :meth:`.openOrders` methods instead.
 
         This method is blocking.
         """
@@ -976,55 +951,6 @@ class IB:
         """
         self.client.cancelRealTimeBars(bars.reqId)
         self.wrapper.endSubscription(bars)
-
-    def reqHistoricalData(
-            self, contract: Contract, endDateTime: object,
-            durationStr: str, barSizeSetting: str,
-            whatToShow: str, useRTH: bool,
-            formatDate: int = 1, keepUpToDate: bool = False,
-            chartOptions: List[TagValue] = None) -> BarDataList:
-        """
-        Request historical bar data.
-
-        This method is blocking.
-
-        https://interactivebrokers.github.io/tws-api/historical_bars.html
-
-        Args:
-            contract: Contract of interest.
-            endDateTime: Can be set to '' to indicate the current time,
-                or it can be given as a datetime.date or datetime.datetime,
-                or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
-                If no timezone is given then the TWS login timezone is used.
-            durationStr: Time span of all the bars. Examples:
-                '60 S', '30 D', '13 W', '6 M', '10 Y'.
-            barSizeSetting: Time period of one bar. Must be one of:
-                '1 secs', '5 secs', '10 secs' 15 secs', '30 secs',
-                '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-                '20 mins', '30 mins',
-                '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-                '1 day', '1 week', '1 month'.
-            whatToShow: Specifies the source for constructing bars.
-                Must be one of:
-                'TRADES', 'MIDPOINT', 'BID', 'ASK', 'BID_ASK',
-                'ADJUSTED_LAST', 'HISTORICAL_VOLATILITY',
-                'OPTION_IMPLIED_VOLATILITY', 'REBATE_RATE', 'FEE_RATE',
-                'YIELD_BID', 'YIELD_ASK', 'YIELD_BID_ASK', 'YIELD_LAST'.
-            useRTH: If True then only show data from within Regular
-                Trading Hours, if False then show all data.
-            formatDate: For an intraday request setting to 2 will cause
-                the returned date fields to be timezone-aware
-                datetime.datetime with UTC timezone, instead of local timezone
-                as used by TWS.
-            keepUpToDate: If True then a realtime subscription is started
-                to keep the bars updated; ``endDateTime`` must be set
-                empty ('') then.
-            chartOptions: Unknown.
-        """
-        return self._run(
-            self.reqHistoricalDataAsync(
-                contract, endDateTime, durationStr, barSizeSetting, whatToShow,
-                useRTH, formatDate, keepUpToDate, chartOptions))
 
     def cancelHistoricalData(self, bars: BarDataList):
         """
@@ -1585,7 +1511,7 @@ class IB:
 
     # now entering the parallel async universe
 
-    async def _connect_async_impl(self, host, port, client_id, timeout, readonly, silent):
+    async def _connect_async_impl(self, host, port, client_id, timeout, readonly):
         async def connect():
             self.wrapper.client_id = client_id
             await self.client.connectAsync(host, port, client_id, timeout)
@@ -1627,9 +1553,10 @@ class IB:
                 continue
             num_tries -= 1
             try:
-                return await self._connect_async_impl(host, port, id, timeout, readonly, silent=(num_tries==0))
+                return await self._connect_async_impl(host, port, id, timeout, readonly)
             except Exception:
-                pass
+                if num_tries == 0:
+                    raise
             finally:
                 used.add(id)
                 def on_disconnect(*args, **kwargs):
@@ -1765,6 +1692,42 @@ class IB:
             self, contract, endDateTime,
             durationStr, barSizeSetting, whatToShow, useRTH,
             formatDate=1, keepUpToDate=False, chartOptions=None):
+        """
+        Request historical bar data.
+
+        https://interactivebrokers.github.io/tws-api/historical_bars.html
+
+        Args:
+            contract: Contract of interest.
+            endDateTime: Can be set to '' to indicate the current time,
+                or it can be given as a datetime.date or datetime.datetime,
+                or it can be given as a string in 'yyyyMMdd HH:mm:ss' format.
+                If no timezone is given then the TWS login timezone is used.
+            durationStr: Time span of all the bars. Examples:
+                '60 S', '30 D', '13 W', '6 M', '10 Y'.
+            barSizeSetting: Time period of one bar. Must be one of:
+                '1 secs', '5 secs', '10 secs' 15 secs', '30 secs',
+                '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+                '20 mins', '30 mins',
+                '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+                '1 day', '1 week', '1 month'.
+            whatToShow: Specifies the source for constructing bars.
+                Must be one of:
+                'TRADES', 'MIDPOINT', 'BID', 'ASK', 'BID_ASK',
+                'ADJUSTED_LAST', 'HISTORICAL_VOLATILITY',
+                'OPTION_IMPLIED_VOLATILITY', 'REBATE_RATE', 'FEE_RATE',
+                'YIELD_BID', 'YIELD_ASK', 'YIELD_BID_ASK', 'YIELD_LAST'.
+            useRTH: If True then only show data from within Regular
+                Trading Hours, if False then show all data.
+            formatDate: For an intraday request setting to 2 will cause
+                the returned date fields to be timezone-aware
+                datetime.datetime with UTC timezone, instead of local timezone
+                as used by TWS.
+            keepUpToDate: If True then a realtime subscription is started
+                to keep the bars updated; ``endDateTime`` must be set
+                empty ('') then.
+            chartOptions: Unknown.
+        """
         reqId = self.client.getReqId()
         bars = BarDataList()
         bars.reqId = reqId
