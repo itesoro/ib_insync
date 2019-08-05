@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from .contract import Contract
 from .order import Order, OrderCondition
@@ -19,141 +20,91 @@ class Decoder:
     Decode IB messages and invoke corresponding wrapper methods.
     """
     def __init__(self, wrapper, serverVersion):
+        f_ = lambda x: Decimal(x or 0)
+        i_ = lambda x: int(x or 0)
+        s_ = str
+        b_ = lambda x: bool(int(x or 0))
         self.wrapper = wrapper
         self.serverVersion = serverVersion
         self.logger = logging.getLogger('ib_insync.Decoder')
         self.handlers = {
             1: self.priceSizeTick,
-            2: self.wrap(
-                'tickSize', [int, int, int]),
-            3: self.wrap(
-                'orderStatus', [
-                    int, str, float, float, float, int, int,
-                    float, int, str, float], skip=1),
-            4: self.wrap(
-                'error', [int, int, str]),
+            2: self.wrap('tickSize', [i_, i_, i_]),
+            3: self.wrap('orderStatus', [i_, s_, f_, f_, f_, i_, i_, f_, i_, s_, f_], skip=1),
+            4: self.wrap('error', [i_, i_, s_]),
             5: self.openOrder,
-            6: self.wrap(
-                'updateAccountValue', [str, str, str, str]),
+            6: self.wrap('updateAccountValue', [s_, s_, s_, s_]),
             7: self.updatePortfolio,
-            8: self.wrap(
-                'updateAccountTime', [str]),
-            9: self.wrap(
-                'nextValidId', [int]),
+            8: self.wrap('updateAccountTime', [s_]),
+            9: self.wrap('nextValidId', [i_]),
             10: self.contractDetails,
             11: self.execDetails,
-            12: self.wrap(
-                'updateMktDepth', [int, int, int, int, float, int]),
-            13: self.wrap(
-                'updateMktDepthL2',
-                [int, int, str, int, int, float, int, bool]),
-            14: self.wrap(
-                'updateNewsBulletin', [int, int, str, str]),
-            15: self.wrap(
-                'managedAccounts', [str]),
-            16: self.wrap(
-                'receiveFA', [int, str]),
+            12: self.wrap('updateMktDepth', [i_, i_, i_, i_, f_, i_]),
+            13: self.wrap('updateMktDepthL2', [i_, i_, s_, i_, i_, f_, i_, b_]),
+            14: self.wrap('updateNewsBulletin', [i_, i_, s_, s_]),
+            15: self.wrap('managedAccounts', [s_]),
+            16: self.wrap('receiveFA', [i_, s_]),
             17: self.historicalData,
             18: self.bondContractDetails,
-            19: self.wrap(
-                'scannerParameters', [str]),
+            19: self.wrap('scannerParameters', [s_]),
             20: self.scannerData,
             21: self.tickOptionComputation,
-            45: self.wrap(
-                'tickGeneric', [int, int, float]),
-            46: self.wrap(
-                'tickString', [int, int, str]),
-            47: self.wrap(
-                'tickEFP',
-                [int, int, float, str, float, int, str, float, float]),
-            49: self.wrap(
-                'currentTime', [int]),
-            50: self.wrap(
-                'realtimeBar',
-                [int, int, float, float, float, float, int, float, int]),
-            51: self.wrap(
-                'fundamentalData', [int, str]),
-            52: self.wrap(
-                'contractDetailsEnd', [int]),
-            53: self.wrap(
-                'openOrderEnd', []),
-            54: self.wrap(
-                'accountDownloadEnd', [str]),
-            55: self.wrap(
-                'execDetailsEnd', [int]),
+            45: self.wrap('tickGeneric', [i_, i_, f_]),
+            46: self.wrap('tickString', [i_, i_, s_]),
+            47: self.wrap('tickEFP',[i_, i_, f_, s_, f_, i_, s_, f_, f_]),
+            49: self.wrap('currentTime', [i_]),
+            50: self.wrap('realtimeBar', [i_, i_, f_, f_, f_, f_, i_, f_, i_]),
+            51: self.wrap('fundamentalData', [i_, s_]),
+            52: self.wrap('contractDetailsEnd', [i_]),
+            53: self.wrap('openOrderEnd', []),
+            54: self.wrap('accountDownloadEnd', [s_]),
+            55: self.wrap('execDetailsEnd', [i_]),
             56: self.deltaNeutralValidation,
-            57: self.wrap(
-                'tickSnapshotEnd', [int]),
-            58: self.wrap(
-                'marketDataType', [int, int]),
+            57: self.wrap('tickSnapshotEnd', [i_]),
+            58: self.wrap('marketDataType', [i_, i_]),
             59: self.commissionReport,
             61: self.position,
-            62: self.wrap(
-                'positionEnd', []),
-            63: self.wrap(
-                'accountSummary', [int, str, str, str, str]),
-            64: self.wrap(
-                'accountSummaryEnd', [int]),
-            65: self.wrap(
-                'verifyMessageAPI', [str]),
-            66: self.wrap(
-                'verifyCompleted', [bool, str]),
-            67: self.wrap(
-                'displayGroupList', [int, str]),
-            68: self.wrap(
-                'displayGroupUpdated', [int, str]),
-            69: self.wrap(
-                'verifyAndAuthMessageAPI', [str, str]),
-            70: self.wrap(
-                'verifyAndAuthCompleted', [bool, str]),
+            62: self.wrap('positionEnd', []),
+            63: self.wrap('accountSummary', [i_, s_, s_, s_, s_]),
+            64: self.wrap('accountSummaryEnd', [i_]),
+            65: self.wrap('verifyMessageAPI', [s_]),
+            66: self.wrap('verifyCompleted', [b_, s_]),
+            67: self.wrap('displayGroupList', [i_, s_]),
+            68: self.wrap('displayGroupUpdated', [i_, s_]),
+            69: self.wrap('verifyAndAuthMessageAPI', [s_, s_]),
+            70: self.wrap('verifyAndAuthCompleted', [b_, s_]),
             71: self.positionMulti,
-            72: self.wrap(
-                'positionMultiEnd', [int]),
-            73: self.wrap(
-                'accountUpdateMulti', [int, str, str, str, str, str]),
-            74: self.wrap(
-                'accountUpdateMultiEnd', [int]),
+            72: self.wrap('positionMultiEnd', [i_]),
+            73: self.wrap('accountUpdateMulti', [i_, s_, s_, s_, s_, s_]),
+            74: self.wrap('accountUpdateMultiEnd', [i_]),
             75: self.securityDefinitionOptionParameter,
-            76: self.wrap(
-                'securityDefinitionOptionParameterEnd', [int], skip=1),
+            76: self.wrap('securityDefinitionOptionParameterEnd', [i_], skip=1),
             77: self.softDollarTiers,
             78: self.familyCodes,
             79: self.symbolSamples,
             80: self.mktDepthExchanges,
-            81: self.wrap(
-                'tickReqParams', [int, float, str, int], skip=1),
+            81: self.wrap('tickReqParams', [i_, f_, s_, i_], skip=1),
             82: self.smartComponents,
-            83: self.wrap(
-                'newsArticle', [int, int, str], skip=1),
-            84: self.wrap(
-                'tickNews', [int, int, str, str, str, str], skip=1),
+            83: self.wrap('newsArticle', [i_, i_, s_], skip=1),
+            84: self.wrap('tickNews', [i_, i_, s_, s_, s_, s_], skip=1),
             85: self.newsProviders,
-            86: self.wrap(
-                'historicalNews', [int, str, str, str, str], skip=1),
-            87: self.wrap(
-                'historicalNewsEnd', [int, bool], skip=1),
-            88: self.wrap(
-                'headTimestamp', [int, str], skip=1),
+            86: self.wrap('historicalNews', [i_, s_, s_, s_, s_], skip=1),
+            87: self.wrap('historicalNewsEnd', [i_, b_], skip=1),
+            88: self.wrap('headTimestamp', [i_, s_], skip=1),
             89: self.histogramData,
             90: self.historicalDataUpdate,
-            91: self.wrap(
-                'rerouteMktDataReq', [int, int, str], skip=1),
-            92: self.wrap(
-                'rerouteMktDepthReq', [int, int, str], skip=1),
+            91: self.wrap('rerouteMktDataReq', [i_, i_, s_], skip=1),
+            92: self.wrap('rerouteMktDepthReq', [i_, i_, s_], skip=1),
             93: self.marketRule,
-            94: self.wrap(
-                'pnl', [int, float, float, float], skip=1),
-            95: self.wrap(
-                'pnlSingle', [int, int, float, float, float, float], skip=1),
+            94: self.wrap('pnl', [i_, f_, f_, f_], skip=1),
+            95: self.wrap('pnlSingle', [i_, i_, f_, f_, f_, f_], skip=1),
             96: self.historicalTicks,
             97: self.historicalTicksBidAsk,
             98: self.historicalTicksLast,
             99: self.tickByTick,
-            100: self.wrap(
-                'orderBound', [int, int, int], skip=1),
+            100: self.wrap('orderBound', [i_, i_, i_], skip=1),
             101: self.completedOrder,
-            102: self.wrap(
-                'completedOrdersEnd', [], skip=1),
+            102: self.wrap('completedOrdersEnd', [], skip=1),
         }
 
     def wrap(self, methodName, types, skip=2):
@@ -165,12 +116,8 @@ class Decoder:
 
         def handler(fields):
             try:
-                args = [
-                    field if typ is str else
-                    int(field or 0) if typ is int else
-                    float(field or 0) if typ is float else
-                    bool(int(field or 0))
-                    for (typ, field) in zip(types, fields[skip:])]
+                assert len(types) == len(fields) - skip
+                args = [typ(field) for (typ, field) in zip(types, fields[skip:])]
                 method(*args)
             except Exception:
                 self.logger.exception(f'Error for {methodName}:')
@@ -198,12 +145,11 @@ class Decoder:
             if typ is str:
                 continue
             v = getattr(obj, k)
-            if typ is int:
-                setattr(obj, k, int(v) if v else default)
-            elif typ is float:
-                setattr(obj, k, float(v) if v else default)
-            elif typ is bool:
-                setattr(obj, k, bool(int(v)) if v else default)
+            if v:
+                v = typ(v) if typ is not bool else bool(int(v))
+            else:
+                v = default
+            setattr(obj, k, v)
 
     def priceSizeTick(self, fields):
         _, _, reqId, tickType, price, size, _ = fields

@@ -243,7 +243,7 @@ class IB:
     def __repr__(self):
         conn = (f'connected to {self.client.host}:'
                 f'{self.client.port} client_id={self.client.client_id}' if
-                self.client.isConnected() else 'not connected')
+                self.client.is_connected else 'not connected')
         return f'<{self.__class__.__qualname__} {conn}>'
 
     def disconnect(self):
@@ -251,23 +251,20 @@ class IB:
         Disconnect from a TWS or IB gateway application.
         This will clear all session state.
         """
-        if not self.client.isConnected():
+        if not self.client.is_connected:
             return
         stats = self.client.connectionStats()
         self._logger.info(
             f'Disconnecting from {self.client.host}:{self.client.port}, '
-            f'{util.formatSI(stats.numBytesSent)}B sent '
-            f'in {stats.numMsgSent} messages, '
-            f'{util.formatSI(stats.numBytesRecv)}B received '
-            f'in {stats.numMsgRecv} messages, '
             f'session time {util.formatSI(stats.duration)}s.')
         self.client.disconnect()
 
-    def isConnected(self) -> bool:
+    @property
+    def is_connected(self) -> bool:
         """
         Is there is an API connection to TWS or IB gateway?
         """
-        return self.client.isConnected()
+        return self.client.is_connected
 
     schedule = staticmethod(util.schedule)
     sleep = staticmethod(util.sleep)
@@ -1514,7 +1511,7 @@ class IB:
     async def _connect_async_impl(self, host, port, client_id, timeout, readonly):
         async def connect():
             self.wrapper.client_id = client_id
-            await self.client.connectAsync(host, port, client_id, timeout)
+            await self.client.connect_async(host, port, client_id)
             if not readonly and self.client.serverVersion() >= 150:
                 await self.reqCompletedOrdersAsync(False)
             accounts = self.client.getAccounts()
@@ -1537,7 +1534,7 @@ class IB:
         return self
 
     async def connect_async(self, host='127.0.0.1', port=7497, timeout=2, readonly=False, num_tries=5):
-        if self.isConnected():
+        if self.is_connected:
             self._logger.warn('Already connected')
             return self
         key = f'{host}:{port}'

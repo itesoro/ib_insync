@@ -1,45 +1,54 @@
 import asyncio
 
 
+def _default_callback(*args):
+    pass
+
+
+def _tmp_str_data(data):
+    n = 10
+    if len(data) < n:
+        return str(data)
+    return str(data[:n]) + '...'
+
+
 class Connection(asyncio.Protocol):
     """
     Socket connection.
     """
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.transport = None
-        self.numBytesSent = 0
-        self.numMsgSent = 0
+    __slots__ = '_transport', 'on_data_received', 'on_connection_lost'
 
-        # the following are callbacks for socket events:
-        self.disconnected = None
-        self.hasError = None
-        self.hasData = None
-
-    async def connectAsync(self):
+    @staticmethod
+    async def create_async(host, port, on_data_received=_default_callback, on_connection_lost=_default_callback):
+        c = Connection()
+        c.transport = None
+        c.on_data_received = on_data_received
+        c.on_connection_lost = on_connection_lost
         loop = asyncio.get_event_loop()
-        self.transport, _ = await loop.create_connection(
-            lambda: self, self.host, self.port)
+        await loop.create_connection(lambda: c, host, port)
+        return c if c.is_connected else None
 
-    def disconnect(self):
-        if self.transport:
-            self.transport.close()
-            self.transport = None
+    def close(self):
+        if self._transport is not None:
+            self._transport.close()
 
-    def isConnected(self):
-        return self.transport is not None
+    @property
+    def is_connected(self) -> bool:
+        return self._transport is not None
 
-    def sendMsg(self, msg):
-        self.transport.write(msg)
-        self.numBytesSent += len(msg)
-        self.numMsgSent += 1
+    def write(self, data):
+        # print('<<', _tmp_str_data(data))
+        # print('<<', data)
+        self._transport.write(data)
+
+    def connection_made(self, transport):
+        self._transport = transport
 
     def connection_lost(self, exc):
-        if exc:
-            self.hasError(str(exc))
-        else:
-            self.disconnected()
+        self.on_connection_lost(exc)
+        self._transport = None
 
     def data_received(self, data):
-        self.hasData(data)
+        # print('>>', _tmp_str_data(data))
+        # print('>>', data)
+        self.on_data_received(data)

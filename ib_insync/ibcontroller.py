@@ -380,7 +380,7 @@ class Watchdog(Object):
             raise ValueError('No controller supplied')
         if not self.ib:
             raise ValueError('No IB instance supplied')
-        if self.ib.isConnected():
+        if self.ib.is_connected:
             raise ValueError('IB instance must not be connected')
         assert 0 < self.appTimeout < 60
         assert self.retryDelay > 0
@@ -416,7 +416,7 @@ class Watchdog(Object):
             try:
                 await self.controller.startAsync()
                 await asyncio.sleep(self.appStartupTime)
-                await self.ib.connectAsync(
+                await self.ib.connect_async(
                     self.host, self.port, self.client_id, self.connectTimeout)
                 self.startedEvent.emit(self)
                 self.ib.setTimeout(self.appTimeout)

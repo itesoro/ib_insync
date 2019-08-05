@@ -36,7 +36,7 @@ class Client:
       to start requests as the client has already done that.
       The reqId is directly available with :py:meth:`.getReqId()`.
 
-    * ``client.connectAsync()`` is a coroutine for connecting asynchronously.
+    * ``client.connect_async()`` is a coroutine for connecting asynchronously.
 
     * When blocking, ``client.connect()`` can be made to time out with
       the timeout parameter (default 2 seconds).
@@ -103,14 +103,14 @@ class Client:
         self._tcpDataProcessed = getattr(wrapper, 'tcpDataProcessed', None)
 
     def __del__(self):
-        if self.isConnected():
+        if self.is_connected:
             self.disconnect()
 
     def reset(self):
         self.host = None
         self.port = None
         self.client_id = None
-        self.conn = None
+        self._connection = None
         self.connState = Client.DISCONNECTED
         self.optCapab = ''
         self._serverVersion = None
@@ -129,7 +129,8 @@ class Client:
     def serverVersion(self):
         return self._serverVersion
 
-    def isConnected(self):
+    @property
+    def is_connected(self) -> bool:
         return self.connState == Client.CONNECTED
 
     def isReady(self) -> bool:
@@ -146,9 +147,7 @@ class Client:
             raise ConnectionError('Not connected')
         return ConnectionStats(
             self._startTime,
-            time.time() - self._startTime,
-            self._numBytesRecv, self.conn.numBytesSent,
-            self._numMsgRecv, self.conn.numMsgSent)
+            time.time() - self._startTime)
 
     def getReqId(self) -> int:
         """
@@ -178,32 +177,29 @@ class Client:
         """
         self._connectOptions = connectOptions.encode()
 
-    async def connectAsync(self, host, port, client_id, timeout=2):
-
-        async def connect():
-            self._logger.info(
-                f'Connecting to {host}:{port} with client_id {client_id}...')
+    async def connect_async(self, host, port, client_id):
+        try:
+            self._logger.info(f'Connecting to {host}:{port} with client_id {client_id}...')
             self.host = host
             self.port = port
             self.client_id = client_id
             self.connState = Client.CONNECTING
-            self.conn = Connection(host, port)
-            self.conn.hasData = self._onSocketHasData
-            self.conn.disconnected = self._onSocketDisconnected
-            self.conn.hasError = self._onSocketHasError
             await asyncio.sleep(0)  # in case of a not yet finished disconnect
-            await self.conn.connectAsync()
+            self._connection = await Connection.create_async(
+                host,
+                port,
+                on_data_received=self._on_data_received,
+                on_connection_lost=self._on_connection_lost
+            )
+            assert self._connection is not None
             self._logger.info('Connected')
             msg = b'API\0' + self._prefix(b'v%d..%d%s' % (
                 self.MinClientVersion, self.MaxClientVersion,
                 b' ' + self._connectOptions if self._connectOptions else b''))
-            self.conn.sendMsg(msg)
+            self._connection.write(msg)
             await self._readyEvent.wait()
             self._logger.info('API connection ready')
             self.apiStart.emit()
-
-        try:
-            await asyncio.wait_for(connect(), timeout or None)
         except Exception as e:
             self.disconnect()
             msg = f'API connection failed: {e!r}'
@@ -218,16 +214,16 @@ class Client:
         Disconnect from IB connection.
         """
         self.connState = Client.DISCONNECTED
-        if self.conn is not None:
+        if self._connection is not None:
             self._logger.info('Disconnecting')
-            self.conn.disconnect()
+            self._connection.close()
             self.reset()
 
     def send(self, *fields):
         """
         Serialize and send the given fields using the IB socket protocol.
         """
-        if not self.isConnected():
+        if not self.is_connected:
             raise ConnectionError('Not connected')
 
         msg = io.StringIO()
@@ -266,7 +262,7 @@ class Client:
             msgs.append(msg)
         while msgs and (len(times) < self.MaxRequests or not self.MaxRequests):
             msg = msgs.popleft()
-            self.conn.sendMsg(self._prefix(msg.encode()))
+            self._connection.write(self._prefix(msg.encode()))
             times.append(t)
             if self._logger.isEnabledFor(logging.DEBUG):
                 self._logger.debug('>>> %s', msg[:-1].replace('\0', ','))
@@ -286,7 +282,7 @@ class Client:
         # prefix a message with its length
         return struct.pack('>I', len(msg)) + msg
 
-    def _onSocketHasData(self, data):
+    def _on_data_received(self, data):
         debug = self._logger.isEnabledFor(logging.DEBUG)
         if self._tcpDataArrived:
             self._tcpDataArrived()
@@ -316,7 +312,7 @@ class Client:
                 version, _connTime = fields
                 self._serverVersion = int(version)
                 if self._serverVersion < self.MinClientVersion:
-                    self._onSocketHasError(
+                    self._on_some_error(
                         'TWS/gateway version must be >= 972')
                     return
                 self.decoder.serverVersion = self._serverVersion
@@ -347,8 +343,11 @@ class Client:
         if self._tcpDataProcessed:
             self._tcpDataProcessed()
 
-    def _onSocketDisconnected(self):
-        if self.isConnected():
+    def _on_connection_lost(self, exc):
+        if exc is not None:
+            self._on_some_error(str(exc))
+            return
+        if self.is_connected:
             msg = f'Peer closed connection'
             self._logger.error(msg)
             if not self.isReady():
@@ -362,7 +361,7 @@ class Client:
         self.reset()
         self.apiEnd.emit()
 
-    def _onSocketHasError(self, msg):
+    def _on_some_error(self, msg):
         self._logger.error(msg)
         if self.isReady():
             self.wrapper.connectionClosed()

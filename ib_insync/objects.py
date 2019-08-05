@@ -583,4 +583,4 @@ SmartComponent = namedtuple(
 
 ConnectionStats = namedtuple(
     'ConnectionStats',
-    'startTime duration numBytesRecv numBytesSent numMsgRecv numMsgSent')
+    'startTime duration')
